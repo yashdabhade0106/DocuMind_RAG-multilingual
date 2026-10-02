@@ -1,52 +1,94 @@
 # DocuMind_RAG — Latency-Optimized Multilingual RAG Application
 
-A lightweight, high-performance Retrieval-Augmented Generation (RAG) system built from scratch in Python and Streamlit without third-party RAG orchestration frameworks (no LangChain, no LlamaIndex).
+A lightweight, enterprise-grade Retrieval-Augmented Generation (RAG) system built from scratch in Python without third-party RAG orchestration frameworks (no LangChain, no LlamaIndex). 
+
+DocuMind features a high-performance **FastAPI** backend with real-time SSE streaming, a modern **React + Vite + TypeScript** frontend with citations and per-stage metrics breakdown, and an optional **Streamlit** dashboard.
 
 ---
 
-## Features
-- **Hand-rolled RAG Architecture**: Complete control over document loading (`pypdf`, `python-docx`, `txt`), custom chunking, `sentence-transformers` embeddings, and `ChromaDB` vector storage.
-- **Latency Optimized**:
-  - `@st.cache_resource` singleton caching for embedding models and ChromaDB clients.
-  - On-disk hash caching (`.cache/`) to avoid re-chunking and re-embedding previously processed documents.
-  - Parallelized PDF text extraction using thread pools.
-  - In-memory query caching (LRU/dictionary).
-  - Real-time token streaming for English answers using Groq SSE & `st.write_stream`.
-  - Optimized Groq model priority list with fallback to local Ollama (`gemma:2b`) and internal heuristic scoring.
-- **Multilingual Support (English / Hindi / Marathi)**:
-  - Select answer language from sidebar.
-  - **3-Tier Resilient Translation Fallback**:
-    1. **Tier 1 (Primary)**: Dedicated Indic translation via **Sarvam AI Translate REST API** (`https://api.sarvam.ai/translate`).
-    2. **Tier 2 (Fallback)**: LLM translation pass via Groq (`llama-3.1-8b-instant`) or local Ollama.
-    3. **Tier 3 (Last Resort)**: Return original English text with an informative note (`Translation Unavailable`).
+## 🌟 Key Features
+
+- **Zero-Framework Hand-Rolled RAG**: Complete architectural control over document loading (`pypdf`, `python-docx`, `.txt`), custom chunking, `sentence-transformers` embeddings, and `ChromaDB` vector storage.
+- **Persistent Multi-Document Registry**: Store multiple documents in a single shared ChromaDB collection with `doc_id` filtering. Upload, select, or delete documents seamlessly.
+- **Latency & Cache Optimizations**:
+  - Model and vector store singletons with startup pre-warming.
+  - On-disk hash caching (`.cache/`) with `schema_version` validation to skip re-chunking and re-embedding.
+  - Multi-threaded parallel PDF text extraction (`ThreadPoolExecutor`).
+  - Thread-safe in-memory LRU query cache keyed by `(normalized_question, language, sorted(doc_ids))`.
+  - Sentence-pipelined multilingual streaming flushing on sentence boundaries (including Devanagari danda `।`).
+- **Resilient 3-Tier Multilingual Pipeline (English / Hindi / Marathi)**:
+  - **Tier 1 (Primary)**: Dedicated Indic translation via **Sarvam AI REST API** (`api.sarvam.ai/translate`).
+  - **Tier 2 (Fallback)**: LLM translation pass via Groq (`llama-3.1-8b-instant`) or local Ollama (`gemma:2b`).
+  - **Tier 3 (Graceful Fallback)**: Returns original text with a clear `Translation Unavailable` notification banner.
+- **Modern Full-Stack UI**:
+  - React + TypeScript + Tailwind CSS with dark/light themes.
+  - Real-time token-by-token streaming with typing cursor and generation cancellation.
+  - Drag-and-drop document upload with animated progress tracking.
+  - Interactive citation cards showing document name, page number, and vector relevance score.
+  - Live latency diagnostics (Retrieval, Generation, Translation, TTFT).
+  - Provider health monitoring (Groq, Sarvam AI, Ollama).
 
 ---
 
-## Quickstart
+## 🏗️ Architecture
 
-### 1. Installation
-Clone the repository and set up a Python virtual environment:
+```
+                       ┌────────────────────────────────────────┐
+                       │     React + Vite + TypeScript UI       │
+                       │   (SSE Streaming, Citations, Metrics)  │
+                       └───────────────────┬────────────────────┘
+                                           │ HTTP / SSE
+                                           ▼
+┌──────────────────────┐       ┌────────────────────────────────────────┐
+│  Streamlit Dashboard │◄─────►│          FastAPI Backend API           │
+│      (app.py)        │       │   (Lifespan Warmup, CORS, REST, SSE)   │
+└──────────────────────┘       └───────────────────┬────────────────────┘
+                                                   │
+                                                   ▼
+                               ┌────────────────────────────────────────┐
+                               │        Decoupled RAG Core Engine       │
+                               │           (rag_service.py)             │
+                               └──────┬───────────────────────┬─────────┘
+                                      │                       │
+                ┌─────────────────────┴───────┐     ┌─────────┴─────────────┐
+                ▼                             ▼     ▼                       ▼
+      ┌──────────────────┐           ┌──────────────┐   ┌────────────────┐  ┌──────────────┐
+      │     ChromaDB     │           │  Disk Cache  │   │      Groq      │  │  Sarvam AI   │
+      │ (Shared Collect) │           │ (.cache/v2)  │   │ (Primary LLM)  │  │ (Indic API)  │
+      └──────────────────┘           └──────────────┘   └────────────────┘  └──────────────┘
+```
+
+---
+
+## 🚀 Quickstart
+
+### 1. Clone & Set Up Python Environment
 
 ```bash
 git clone https://github.com/AmeyKhodke/DocuMind_RAG.git
 cd DocuMind_RAG
+
+# Create and activate virtual environment
 python -m venv venv
+
 # On Windows:
 venv\Scripts\activate
 # On Linux/macOS:
 source venv/bin/activate
 
+# Install backend dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Environment Setup
+### 2. Configure Environment Variables
+
 Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and insert your API keys:
+Edit `.env` and supply your API keys:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
@@ -54,46 +96,91 @@ SARVAM_API_KEY=your_sarvam_api_key_here
 HF_TOKEN=your_hf_token_here
 ```
 
-#### How to get a free Sarvam AI API Key:
-1. Visit [Sarvam AI Dashboard](https://dashboard.sarvam.ai/).
-2. Sign up / log in to your account.
-3. Navigate to **API Keys** and generate a new key.
-4. Copy the key and paste it as `SARVAM_API_KEY` in your `.env` file or Streamlit secrets.
+> **Note**: Both Groq and Sarvam AI offer free tiers. If an API key is missing or rate-limited, DocuMind automatically falls back to local Ollama or heuristic retrieval scoring.
 
-### 3. Run the Dashboard
+---
+
+### 3. Run the Application
+
+#### Option A: Full-Stack React + FastAPI App (Recommended)
+
+1. **Start the FastAPI backend** (runs on port 8000):
+   ```bash
+   uvicorn backend.main:app --port 8000 --reload
+   ```
+
+2. **Start the React frontend** (in a separate terminal, runs on port 5173):
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+#### Option B: Standalone Streamlit Dashboard
+
+If you prefer the single-process Streamlit interface:
 
 ```bash
 streamlit run app.py
 ```
 
+Open [http://localhost:8501](http://localhost:8501) in your browser.
+
 ---
 
-## How to Add New Languages (Extensibility)
+## 📡 API Endpoints
 
-Adding support for additional Indic or global languages takes just two simple updates:
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | Provider connectivity status (Groq, Sarvam, Ollama) |
+| `GET` | `/api/languages` | Supported languages and BCP-47 codes |
+| `GET` | `/api/documents` | List uploaded documents with chunk and cache metadata |
+| `POST` | `/api/documents` | Upload and process documents (`.pdf`, `.docx`, `.txt`) |
+| `DELETE` | `/api/documents/{doc_id}` | Delete document and purge related cache entries |
+| `POST` | `/api/chat/stream` | Server-Sent Events (SSE) streaming chat endpoint |
 
-1. **Update `rag_service.py`**: Add the language name and its corresponding BCP-47 code to `LANGUAGE_CODES`:
+Interactive OpenAPI documentation is available at `http://localhost:8000/docs`.
 
-```python
-LANGUAGE_CODES = {
-    "English": "en-IN",
-    "हिंदी (Hindi)": "hi-IN",
-    "मराठी (Marathi)": "mr-IN",
-    "ગુજરાતી (Gujarati)": "gu-IN",   # Example 4th language
-    "தமிழ் (Tamil)": "ta-IN"          # Example 5th language
-}
+---
+
+## 🧪 Testing & Benchmarks
+
+### Automated Test Suite
+Run the backend test suite covering endpoints, caching, document lifecycle, and fallback mechanisms:
+
+```bash
+pytest
 ```
 
-2. **No UI changes required**: `app.py` automatically populates the language selection dropdown directly from `rag_service.LANGUAGE_CODES.keys()`.
-
----
-
-## Testing & Profiling
-
-Run the standalone profiling and fallback test suite:
+### Latency Profiling
+Run the standalone benchmarking tool:
 
 ```bash
 python test_and_profile.py
 ```
 
-For detailed performance numbers and architectural insights, refer to [PERFORMANCE.md](PERFORMANCE.md).
+Detailed performance statistics and architectural comparisons are documented in [PERFORMANCE.md](PERFORMANCE.md).
+
+---
+
+## 🌐 Adding New Languages
+
+Adding support for an additional language is completely zero-code on the frontend:
+
+1. Open `rag_service.py` and append your language to `LANGUAGE_CODES`:
+   ```python
+   LANGUAGE_CODES = {
+       "English": "en-IN",
+       "हिंदी (Hindi)": "hi-IN",
+       "मराठी (Marathi)": "mr-IN",
+       "ગુજરાતી (Gujarati)": "gu-IN",   # Example 4th language
+   }
+   ```
+2. Both the FastAPI backend `/api/languages` endpoint and the Streamlit dropdown will automatically populate the new language.
+
+---
+
+## 📄 License
+MIT License. Handcrafted for high-speed, local & cloud hybrid multilingual document intelligence.

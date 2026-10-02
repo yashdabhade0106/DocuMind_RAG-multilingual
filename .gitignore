@@ -36,5 +36,19 @@ pip-delete-this-directory.txt
 *.sln
 *.swp
 
-# Local history
+# Local history & testing
 .lh/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node & Frontend
+node_modules/
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
