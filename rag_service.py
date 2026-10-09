@@ -83,7 +83,9 @@ MAX_QUERY_CACHE_SIZE = 500
 LANGUAGE_CODES = {
     "English": "en-IN",
     "हिंदी (Hindi)": "hi-IN",
-    "मराठी (Marathi)": "mr-IN"
+    "मराठी (Marathi)": "mr-IN",
+    "ਪੰਜਾਬੀ (Punjabi)": "pa-IN",
+    "ગુજરાતી (Gujarati)": "gu-IN"
 }
 
 def _get_config_value(keys: list[str]) -> str | None:
